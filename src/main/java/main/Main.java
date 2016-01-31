@@ -2,12 +2,16 @@ package main;
 
 import accounts.AccountService;
 import database.DBService;
+import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.handler.HandlerList;
+import org.eclipse.jetty.server.handler.ResourceHandler;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 import servlets.MirrorServlet;
 import servlets.SignInServlet;
 import servlets.SignUpServlet;
+import servlets.WebSocketChatServlet;
 
 import java.util.logging.Logger;
 
@@ -18,11 +22,11 @@ import java.util.logging.Logger;
 public class Main {
 
     public static void main(String[] args) throws Exception {
-        DBService dbService = new DBService();
-        startServer(dbService);
+        startServer();
     }
 
-    static void addAuthorizedServlets(ServletContextHandler context, DBService dbService) {
+    static void addAuthorizedServlets(ServletContextHandler context) {
+        DBService dbService = new DBService();
         AccountService accountService = new AccountService(dbService);
         context.addServlet(new ServletHolder(new SignUpServlet(accountService)), "/signup");
         context.addServlet(new ServletHolder(new SignInServlet(accountService)), "/signin");
@@ -33,12 +37,25 @@ public class Main {
         context.addServlet(new ServletHolder(servlet), "/mirror");
     }
 
-    static void startServer(DBService dbService) throws Exception {
-        ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
-        addAuthorizedServlets(context, dbService);
+    static Server addWebSocketChatServlet(ServletContextHandler context, Server server) {
+        context.addServlet(new ServletHolder(new WebSocketChatServlet()), "/chat");
+        ResourceHandler resourceHandler = new ResourceHandler();
+        resourceHandler.setDirectoriesListed(true);
+        //resourceHandler.setWelcomeFiles(new String[]{"index.html"});
+        resourceHandler.setResourceBase("chat");
 
+        HandlerList handlerList = new HandlerList();
+        handlerList.setHandlers(new Handler[]{resourceHandler, context});
+
+        server.setHandler(handlerList);
+        return server;
+    }
+
+    static void startServer() throws Exception {
+        ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
         Server server = new Server(8080);
-        server.setHandler(context);
+        //addAuthorizedServlets(context);
+        addWebSocketChatServlet(context, server);
 
         server.start();
         Logger.getGlobal().info("Server started");
